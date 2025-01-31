@@ -7,7 +7,7 @@
     "capabilities": ["card-buttons"],
     "connectors": {
         "iframe": {
-            "url": "./index.html"
+            "url": "https://aksozib.github.io/Trello-attchment-downloader/"
         }
     }
 }
