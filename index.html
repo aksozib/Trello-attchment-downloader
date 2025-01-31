@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advanced Attachment Downloader</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .attachment-container {
+            padding: 15px;
+            max-width: 450px;
+            font-family: Arial, sans-serif;
+        }
+
+        .attachment-list {
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-icon {
+            width: 30px;
+            margin-right: 10px;
+            color: #6b778c;
+        }
+
+        .file-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-size {
+            color: #6b778c;
+            font-size: 0.9em;
+        }
+
+        .folder-input {
+            width: 120px;
+            margin-left: 10px;
+            padding: 3px;
+            font-size: 0.9em;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #0079bf;
+            transition: width 0.3s ease;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            gap: 10px;
+        }
+
+        button {
+            background: #0079bf;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        button:hover {
+            background: #005a8e;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="attachment-container">
+        <div class="controls">
+            <button id="select-all">Select All</button>
+            <button id="deselect-all">Deselect All</button>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: 0%"></div>
+        </div>
+
+        <div class="attachment-list" id="attachment-list"></div>
+        
+        <button id="download-zip" disabled>
+            <i class="fas fa-file-archive"></i> Download Selected
+        </button>
+    </div>
+
+    <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script>
+        const t = TrelloPowerUp.iframe();
+        let attachments = [];
+        const folderStructure = {};
+
+        // File type to icon mapping
+        const fileIcons = {
+            'pdf': 'file-pdf',
+            'doc': 'file-word',
+            'docx': 'file-word',
+            'xls': 'file-excel',
+            'xlsx': 'file-excel',
+            'ppt': 'file-powerpoint',
+            'pptx': 'file-powerpoint',
+            'zip': 'file-archive',
+            'jpg': 'file-image',
+            'jpeg': 'file-image',
+            'png': 'file-image',
+            'gif': 'file-image',
+            'txt': 'file-alt',
+            'default': 'file'
+        };
+
+        // Helper to format file size
+        function formatFileSize(bytes) {
+            if (!bytes) return 'N/A';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let size = bytes;
+            let unitIndex = 0;
+            
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+            
+            return `${size.toFixed(1)} ${units[unitIndex]}`;
+        }
+
+        // Get file icon class
+        function getFileIcon(filename) {
+            const extension = filename.split('.').pop().toLowerCase();
+            return fileIcons[extension] || fileIcons.default;
+        }
+
+        // Render attachment list
+        function renderAttachmentList() {
+            const container = document.getElementById('attachment-list');
+            container.innerHTML = '';
+
+            attachments.forEach((attachment, index) => {
+                const div = document.createElement('div');
+                div.className = 'attachment-item';
+                
+                div.innerHTML = `
+                    <input type="checkbox" class="checkboxes" id="att-${index}" 
+                           ${attachment.selected ? 'checked' : ''}>
+                    <i class="fas ${getFileIcon(attachment.name)} file-icon"></i>
+                    <div class="file-info">
+                        <div class="file-name">${attachment.name}</div>
+                        <div class="file-size">${formatFileSize(attachment.bytes)}</div>
+                    </div>
+                    <input type="text" class="folder-input" 
+                           placeholder="Folder (optional)" 
+                           data-index="${index}"
+                           value="${folderStructure[index] || ''}">
+                `;
+
+                div.querySelector('.checkboxes').addEventListener('change', updateDownloadButton);
+                div.querySelector('.folder-input').addEventListener('input', updateFolderStructure);
+                container.appendChild(div);
+            });
+        }
+
+        function updateFolderStructure(e) {
+            const index = parseInt(e.target.dataset.index);
+            folderStructure[index] = e.target.value.trim();
+        }
+
+        function updateDownloadButton() {
+            const hasSelection = document.querySelectorAll('.checkboxes:checked').length > 0;
+            document.getElementById('download-zip').disabled = !hasSelection;
+        }
+
+        // Initial setup
+        t.render(async () => {
+            const card = await t.card('attachments');
+            attachments = card.attachments.map(att => ({
+                ...att,
+                selected: true
+            }));
+            renderAttachmentList();
+            updateDownloadButton();
+        });
+
+        // Selection controls
+        document.getElementById('select-all').addEventListener('click', () => {
+            attachments.forEach(att => att.selected = true);
+            renderAttachmentList();
+            updateDownloadButton();
+        });
+
+        document.getElementById('deselect-all').addEventListener('click', () => {
+            attachments.forEach(att => att.selected = false);
+            renderAttachmentList();
+            updateDownloadButton();
+        });
+
+        // Download handler
+        document.getElementById('download-zip').addEventListener('click', async () => {
+            const progressBar = document.querySelector('.progress-bar');
+            const progressFill = document.querySelector('.progress-fill');
+            const downloadButton = document.getElementById('download-zip');
+            
+            try {
+                progressBar.style.display = 'block';
+                downloadButton.disabled = true;
+                downloadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing ZIP...';
+
+                const zip = new JSZip();
+                const selectedAttachments = attachments
+                    .map((att, index) => ({...att, index}))
+                    .filter(att => att.selected);
+
+                let processed = 0;
+                const total = selectedAttachments.length;
+
+                for (const {attachment, index} of selectedAttachments.map(att => ({
+                    attachment: att,
+                    index: att.index
+                }))) {
+                    const response = await fetch(attachment.url);
+                    const blob = await response.blob();
+                    const folder = folderStructure[index] || '';
+                    
+                    if (folder) {
+                        zip.folder(folder).file(attachment.name, blob);
+                    } else {
+                        zip.file(attachment.name, blob);
+                    }
+
+                    processed++;
+                    progressFill.style.width = `${(processed / total) * 100}%`;
+                }
+
+                progressFill.style.width = '100%';
+                const content = await zip.generateAsync({ type: 'blob' });
+
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'trello-attachments.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (error) {
+                console.error('Error creating ZIP:', error);
+                alert('Error downloading attachments. Please try again.');
+            } finally {
+                progressBar.style.display = 'none';
+                progressFill.style.width = '0%';
+                downloadButton.disabled = false;
+                downloadButton.innerHTML = '<i class="fas fa-file-archive"></i> Download Selected';
+            }
+        });
+    </script>
+</body>
+</html>
