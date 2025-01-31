@@ -3,6 +3,7 @@
 <head>
     <title>Advanced Attachment Downloader</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<script src="https://p.trellocdn.com/power-up.min.js"></script>
     <style>
         .attachment-container {
             padding: 15px;
@@ -97,6 +98,19 @@
     </style>
 </head>
 <body>
+
+<script>
+    const t = TrelloPowerUp.iframe();
+    t.render(() => {
+      t.cardButton({
+        icon: 'https://cdn-icons-png.flaticon.com/512/179/179249.png',
+        text: 'Download',
+        callback: () => t.popup({ title: 'Downloader', url: './index.html' })
+      });
+      return [];
+    });
+  </script>
+
     <div class="attachment-container">
         <div class="controls">
             <button id="select-all">Select All</button>
